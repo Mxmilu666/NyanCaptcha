@@ -35,9 +35,6 @@ func TestPredicateAnswers(t *testing.T) {
 		{"and", And{[]Predicate{ColorIs{red}, KindIs{scene.Circle}}}, 1},
 		{"or", Or{[]Predicate{ColorIs{red}, KindIs{scene.Circle}}}, 4},
 		{"not", Not{ColorIs{red}}, 4}, {"position", Position{Left}, 4},
-		{"larger", Related{scene.LargerThan, Reference{Color: &red, Kind: scene.Circle}}, 2},
-		{"every", Related{scene.LargerThan, Reference{Color: &red, All: true}}, 2},
-		{"count", CountComparison{Filter: ColorIs{red}, Relation: scene.LargerThan, Op: Equal, Value: 2}, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -55,6 +52,41 @@ func TestPredicateAnswers(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSizePredicateAnswers(t *testing.T) {
+	s := fixture()
+	// Separate both reference shapes and every other candidate by more than 2x
+	// area, including candidates that should not match the comparison.
+	s.Shapes[1].Width, s.Shapes[1].Height = 12, 12
+	s.Shapes[4].Width, s.Shapes[4].Height = 7, 7
+	s.Shapes[5].Width, s.Shapes[5].Height = 6, 6
+	red := scene.Palette()[0]
+	for _, p := range []Predicate{
+		Related{scene.LargerThan, Reference{Color: &red, Kind: scene.Circle}},
+		Related{scene.LargerThan, Reference{Color: &red, All: true}},
+		CountComparison{Filter: ColorIs{red}, Relation: scene.LargerThan, Op: Equal, Value: 2},
+	} {
+		if n, err := Count(s, p); err != nil || n != 2 {
+			t.Fatalf("%T: Count = %d, %v; want 2", p, n, err)
+		}
+	}
+}
+
+func TestSizeQuestionsRejectSimilarNonmatches(t *testing.T) {
+	s := fixture()
+	red := scene.Palette()[0]
+	for _, relation := range []scene.Relation{scene.LargerThan, scene.SmallerThan} {
+		for _, p := range []Predicate{
+			Related{relation, Reference{Color: &red, Kind: scene.Circle}},
+			Related{relation, Reference{Color: &red, All: true}},
+			CountComparison{Filter: ColorIs{red}, Relation: relation, Op: AtLeast, Value: 1},
+		} {
+			if _, err := Count(s, p); err == nil {
+				t.Fatalf("%T %s accepted similar-sized candidates", p, relation)
+			}
+		}
 	}
 }
 func TestReferenceAndBoundaryRejection(t *testing.T) {
@@ -122,6 +154,9 @@ func TestBuildAllTypes(t *testing.T) {
 			}
 			if typ == Occlusion {
 				s = occludedFixture()
+			}
+			if typ == Size {
+				s.Shapes[0].Width, s.Shapes[0].Height = 16, 16
 			}
 			for _, lang := range []Language{English, Chinese} {
 				q := mustBuild(t, s, typ, n, lang)

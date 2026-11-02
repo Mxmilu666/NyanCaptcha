@@ -114,6 +114,27 @@ func TestRelationsAndAmbiguity(t *testing.T) {
 	}
 }
 
+func TestSizeRelationsRequireClearSeparation(t *testing.T) {
+	a := testShape(Rectangle, 1, 50, 50, 40, 40)
+	for _, ratio := range []float64{0.25, 0.5, 0.624, 0.625, 0.626, 0.9, 1, 1.1, 1.31, 1.59, 1.6, 1.61, 2, 4} {
+		b := testShape(Rectangle, 2, 130, 50, 40*ratio, 40)
+		for _, relation := range []Relation{LargerThan, SmallerThan} {
+			wantMatch := ratio < 0.625
+			if relation == SmallerThan {
+				wantMatch = ratio > 1.6
+			}
+			wantAmbiguous := ratio >= 0.625 && ratio <= 1.6
+			match, ambiguous := Relate(testScene(a, b), a, b, relation)
+			if match != wantMatch || ambiguous != wantAmbiguous {
+				t.Fatalf("%s with target area ratio %g = (%v,%v), want (%v,%v)", relation, ratio, match, ambiguous, wantMatch, wantAmbiguous)
+			}
+			if match, ambiguous := Relate(testScene(a), a, a, relation); match || ambiguous {
+				t.Fatalf("self %s = (%v,%v)", relation, match, ambiguous)
+			}
+		}
+	}
+}
+
 func TestUnionOcclusionAndOrdering(t *testing.T) {
 	back := testShape(Rectangle, 1, 50, 50, 40, 40)
 	front := testShape(Rectangle, 2, 60, 50, 20, 40)

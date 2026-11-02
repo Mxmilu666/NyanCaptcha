@@ -204,7 +204,9 @@ func greaterBand(value, low, high float64) (bool, bool) {
 // axis extent: >0.65 is true, <0.45 false, and the closed interval is ambiguous.
 // Near compares center distance / mean actual bounding diagonal: <0.85 is true,
 // >1.05 false; Far uses >1.8 and <1.6. Larger/Smaller compare analytic areas with
-// true ratio >1.30, false <1.15. Intersections use the half-pixel lattice:
+// true ratio >1.6, false <0.625; the closed interval [0.625,1.6] is ambiguous in both
+// directions, so visually similar sizes cannot become definite nonmatches.
+// Self-relations remain false. Intersections use the half-pixel lattice:
 // Overlapping requires >4% of the smaller shape; zero is false, (0,4%] ambiguous.
 // Inside requires >=99.5% of the first shape inside the second; <=95% is false.
 // Occluded requires the second shape to be above the first and cover >4% of
@@ -244,9 +246,9 @@ func Relate(s *Scene, a, b Shape, r Relation) (match, ambiguous bool) {
 		}
 		return greaterBand(distance/scale, 1.6, 1.8)
 	case LargerThan:
-		return greaterBand(Area(a)/Area(b), 1.15, 1.30)
+		return greaterBand(Area(a)/Area(b), 1/1.6, 1.6)
 	case SmallerThan:
-		return greaterBand(Area(b)/Area(a), 1.15, 1.30)
+		return greaterBand(Area(b)/Area(a), 1/1.6, 1.6)
 	case Inside, Overlapping, Occluded:
 		if r == Occluded && b.Z <= a.Z {
 			return false, false

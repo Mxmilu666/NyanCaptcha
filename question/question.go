@@ -264,6 +264,37 @@ func relationCandidate(s *scene.Scene, rs []scene.Relation, all bool) (Predicate
 	}
 	return Related{Relation: rs[i], Target: r}, nil
 }
+
+// sizeCandidate samples only references whose area is clearly separated from
+// every other shape; otherwise dense scenes waste attempts on ambiguous pairs.
+func sizeCandidate(s *scene.Scene) (Predicate, error) {
+	i, err := pick(2)
+	if err != nil {
+		return nil, err
+	}
+	relation := scene.LargerThan
+	if i == 1 {
+		relation = scene.SmallerThan
+	}
+	var selected Predicate
+	eligible := 0
+	for _, sh := range s.Shapes {
+		p := Related{Relation: relation, Target: unique(sh)}
+		n, err := Count(s, p)
+		if err != nil || n == 0 || n == len(s.Shapes) {
+			continue
+		}
+		eligible++
+		choice, err := pick(eligible)
+		if err != nil {
+			return nil, err
+		}
+		if choice == 0 {
+			selected = p
+		}
+	}
+	return selected, nil
+}
 func candidate(s *scene.Scene, t Type, n int) (Predicate, error) {
 	var p Predicate
 	var e error
@@ -298,7 +329,7 @@ func candidate(s *scene.Scene, t Type, n int) (Predicate, error) {
 			}
 		}
 	case Size:
-		p, e = relationCandidate(s, []scene.Relation{scene.LargerThan, scene.SmallerThan}, false)
+		p, e = sizeCandidate(s)
 	case MultiTarget:
 		p, e = relationCandidate(s, []scene.Relation{scene.LargerThan, scene.SmallerThan, scene.LeftOf, scene.RightOf, scene.Above, scene.Below, scene.Near, scene.Far}, true)
 	case Exclusion:

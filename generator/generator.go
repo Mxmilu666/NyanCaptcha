@@ -46,6 +46,13 @@ func Generate(c Config) (*scene.Scene, error) {
 		}
 		cells[i], cells[j] = cells[j], cells[i]
 	}
+	// Keep one middle-sized shape isolated from both size groups so a size
+	// question has a usable reference even when the scene contains many shapes.
+	reference, err := random.Int(n)
+	if err != nil {
+		return nil, err
+	}
+	smallArea := math.Max(12*12, base*base*0.16)
 	s := &scene.Scene{Width: c.Width, Height: c.Height, Shapes: make([]scene.Shape, 0, n)}
 	for i := range n {
 		// Collect entropy up front and propagate failures rather than substituting defaults.
@@ -64,11 +71,25 @@ func Generate(c Config) (*scene.Scene, error) {
 		if e != nil {
 			return nil, e
 		}
-		w := base * (0.72 + 0.48*u[0])
-		h := w
-		if c.Kinds[ki] == scene.Ellipse || c.Kinds[ki] == scene.Rectangle {
-			h = w * (0.65 + 0.2*u[1])
+		// Normalize by filled area, not bounding-box width: stars and triangles
+		// otherwise look as wide as circles while having much less area.
+		// Leave room for the 4% jitter above the 1.6x comparison threshold.
+		area := smallArea * (1 + 0.04*u[0])
+		if i == reference {
+			area *= 1.7
+		} else if u[0] >= 0.5 {
+			area *= 1.7 * 1.7
 		}
+		aspect := 1.0
+		if c.Kinds[ki] == scene.Ellipse || c.Kinds[ki] == scene.Rectangle {
+			aspect = math.Max(12*12/area, 0.65+0.2*u[1])
+		}
+		unitArea := scene.Area(scene.Shape{Kind: c.Kinds[ki], Width: 1, Height: aspect})
+		if unitArea <= 0 {
+			return nil, errors.New("generator: invalid shape kind")
+		}
+		w := math.Sqrt(area / unitArea)
+		h := w * aspect
 		x := (float64(cells[i]%cols)+0.5)*cw + (u[2]-0.5)*cw*0.22
 		y := (float64(cells[i]/cols)+0.5)*ch + (u[3]-0.5)*ch*0.22
 		if i > 0 && u[4] < c.Overlap {
