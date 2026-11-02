@@ -199,9 +199,23 @@ func greaterBand(value, low, high float64) (bool, bool) {
 	return false, true
 }
 
+func alignedDirection(along, across float64) (match, ambiguous bool) {
+	direction, directionAmbiguous := greaterBand(along, .45, .65)
+	aligned, alignmentAmbiguous := greaterBand(-math.Abs(across), -.75, -.5)
+	// A clearly wrong direction or separate row/column rules out the relation,
+	// even when the other component is on its boundary.
+	if !direction && !directionAmbiguous || !aligned && !alignmentAmbiguous {
+		return false, false
+	}
+	return direction && aligned, directionAmbiguous || alignmentAmbiguous
+}
+
 // Relate evaluates a strict relation; ambiguous results must not be presented as
 // false facts. Directional relations compare center displacement to mean actual
 // axis extent: >0.65 is true, <0.45 false, and the closed interval is ambiguous.
+// Left/Right also require the same row, Above/Below the same column: absolute
+// perpendicular center displacement / mean actual perpendicular extent must be
+// <0.5; >0.75 is a different row/column, and [0.5,0.75] is ambiguous.
 // Near compares center distance / mean actual bounding diagonal: <0.85 is true,
 // >1.05 false; Far uses >1.8 and <1.6. Larger/Smaller compare analytic areas with
 // true ratio >1.6, false <0.625; the closed interval [0.625,1.6] is ambiguous in both
@@ -231,13 +245,19 @@ func Relate(s *Scene, a, b Shape, r Relation) (match, ambiguous bool) {
 		if r == RightOf {
 			d = -d
 		}
-		return greaterBand(d/((ga.box.maxX-ga.box.minX+gb.box.maxX-gb.box.minX)/2), .45, .65)
+		return alignedDirection(
+			d/((ga.box.maxX-ga.box.minX+gb.box.maxX-gb.box.minX)/2),
+			(a.Center.Y-b.Center.Y)/((ga.box.maxY-ga.box.minY+gb.box.maxY-gb.box.minY)/2),
+		)
 	case Above, Below:
 		d := b.Center.Y - a.Center.Y
 		if r == Below {
 			d = -d
 		}
-		return greaterBand(d/((ga.box.maxY-ga.box.minY+gb.box.maxY-gb.box.minY)/2), .45, .65)
+		return alignedDirection(
+			d/((ga.box.maxY-ga.box.minY+gb.box.maxY-gb.box.minY)/2),
+			(a.Center.X-b.Center.X)/((ga.box.maxX-ga.box.minX+gb.box.maxX-gb.box.minX)/2),
+		)
 	case Near, Far:
 		distance := math.Hypot(a.Center.X-b.Center.X, a.Center.Y-b.Center.Y)
 		scale := (math.Hypot(ga.box.maxX-ga.box.minX, ga.box.maxY-ga.box.minY) + math.Hypot(gb.box.maxX-gb.box.minX, gb.box.maxY-gb.box.minY)) / 2

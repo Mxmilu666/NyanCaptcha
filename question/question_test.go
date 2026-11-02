@@ -35,6 +35,7 @@ func TestPredicateAnswers(t *testing.T) {
 		{"and", And{[]Predicate{ColorIs{red}, KindIs{scene.Circle}}}, 1},
 		{"or", Or{[]Predicate{ColorIs{red}, KindIs{scene.Circle}}}, 4},
 		{"not", Not{ColorIs{red}}, 4}, {"position", Position{Left}, 4},
+		{"count same row", CountComparison{Filter: ColorIs{red}, Relation: scene.LeftOf, Op: AtLeast, Value: 1}, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -87,6 +88,35 @@ func TestSizeQuestionsRejectSimilarNonmatches(t *testing.T) {
 				t.Fatalf("%T %s accepted similar-sized candidates", p, relation)
 			}
 		}
+	}
+}
+
+func TestDirectionalQuestionCountsOnlyAlignedShapes(t *testing.T) {
+	colors := scene.Palette()
+	// Approximate the reported two-row image: three shapes beside the blue
+	// star, with three more diagonally above-left that must not be counted.
+	shapes := []scene.Shape{
+		{ID: 1, Z: 1, Kind: scene.Rectangle, Center: scene.Point{X: 98, Y: 110}, Width: 50, Height: 64, Rotation: .7, Fill: colors[3]},
+		{ID: 2, Z: 2, Kind: scene.Hexagon, Center: scene.Point{X: 256, Y: 88}, Width: 90, Height: 90, Fill: colors[5]},
+		{ID: 3, Z: 3, Kind: scene.Circle, Center: scene.Point{X: 394, Y: 102}, Width: 82, Height: 82, Fill: colors[0]},
+		{ID: 4, Z: 4, Kind: scene.Pentagon, Center: scene.Point{X: 550, Y: 128}, Width: 52, Height: 52, Fill: colors[4]},
+		{ID: 5, Z: 5, Kind: scene.Circle, Center: scene.Point{X: 78, Y: 342}, Width: 48, Height: 48, Fill: colors[4]},
+		{ID: 6, Z: 6, Kind: scene.Hexagon, Center: scene.Point{X: 240, Y: 316}, Width: 52, Height: 52, Fill: colors[0]},
+		{ID: 7, Z: 7, Kind: scene.Circle, Center: scene.Point{X: 418, Y: 335}, Width: 82, Height: 82, Fill: colors[3]},
+		{ID: 8, Z: 8, Kind: scene.Star, Center: scene.Point{X: 556, Y: 308}, Width: 120, Height: 120, Fill: colors[1]},
+	}
+	s := &scene.Scene{Width: 648, Height: 432, Shapes: shapes}
+	p := Related{Relation: scene.LeftOf, Target: Reference{Color: &colors[1], Kind: scene.Star}}
+	n, err := Count(s, p)
+	if err != nil || n != 3 {
+		t.Fatalf("left of star = %d, %v; want 3", n, err)
+	}
+	text, err := Render(p, Chinese)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(s, Question{Type: Spatial, Text: text, Answer: 3, Expr: p}); err != nil {
+		t.Fatal(err)
 	}
 }
 func TestReferenceAndBoundaryRejection(t *testing.T) {

@@ -344,3 +344,38 @@ func TestStrictDirectionThresholds(t *testing.T) {
 		}
 	}
 }
+
+func TestDirectionsRequireAlignedRowsAndColumns(t *testing.T) {
+	for _, relation := range []Relation{LeftOf, RightOf, Above, Below} {
+		for _, tc := range []struct {
+			along, across    float64
+			match, ambiguous bool
+		}{
+			{80, 0, true, false},
+			{80, 19, true, false},
+			{80, 20, false, true},
+			{80, 25, false, true},
+			{80, 30, false, true},
+			{80, 31, false, false},
+			{80, 80, false, false},
+			{22, 80, false, false},
+			{-80, 25, false, false},
+		} {
+			for _, sign := range []float64{-1, 1} {
+				a := testShape(Rectangle, 1, 100, 100, 40, 40)
+				dx, dy := tc.along, sign*tc.across
+				if relation == RightOf || relation == Below {
+					dx = -dx
+				}
+				if relation == Above || relation == Below {
+					dx, dy = dy, dx
+				}
+				b := testShape(Rectangle, 2, 100+dx, 100+dy, 40, 40)
+				match, ambiguous := Relate(testScene(a, b), a, b, relation)
+				if match != tc.match || ambiguous != tc.ambiguous {
+					t.Fatalf("%s offset (%g,%g) = (%v,%v), want (%v,%v)", relation, dx, dy, match, ambiguous, tc.match, tc.ambiguous)
+				}
+			}
+		}
+	}
+}
