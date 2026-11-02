@@ -73,6 +73,12 @@ func Render(p Predicate, l Language) (string, error) {
 	if e != nil {
 		return "", e
 	}
+	if l == Chinese {
+		switch p.(type) {
+		case Related, *Related, CountComparison, *CountComparison:
+			return "有多少个图形" + d + "？", nil
+		}
+	}
 	return phrase(l, "How many shapes "+d+"?", "有多少个图形满足："+d+"？")
 }
 

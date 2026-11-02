@@ -352,27 +352,27 @@ func (p Related) Evaluate(s *scene.Scene, sh scene.Shape) (bool, error) {
 func relationNames(r scene.Relation) (string, string, error) {
 	switch r {
 	case scene.LeftOf:
-		return "are to the left of", "位于其左侧", nil
+		return "are to the left of", "位于%s的左侧", nil
 	case scene.RightOf:
-		return "are to the right of", "位于其右侧", nil
+		return "are to the right of", "位于%s的右侧", nil
 	case scene.Above:
-		return "are above", "位于其上方", nil
+		return "are above", "位于%s的上方", nil
 	case scene.Below:
-		return "are below", "位于其下方", nil
+		return "are below", "位于%s的下方", nil
 	case scene.Near:
-		return "are near", "靠近它", nil
+		return "are near", "靠近%s", nil
 	case scene.Far:
-		return "are far from", "远离它", nil
+		return "are far from", "远离%s", nil
 	case scene.Inside:
-		return "are inside", "位于其内部", nil
+		return "are inside", "位于%s的内部", nil
 	case scene.Overlapping:
-		return "overlap", "与它重叠", nil
+		return "overlap", "与%s重叠", nil
 	case scene.Occluded:
-		return "are partly hidden behind", "被它部分遮挡", nil
+		return "are partly hidden behind", "被%s部分遮挡", nil
 	case scene.LargerThan:
-		return "have greater area than", "面积比它大", nil
+		return "have greater area than", "面积比%s大", nil
 	case scene.SmallerThan:
-		return "have smaller area than", "面积比它小", nil
+		return "have smaller area than", "面积比%s小", nil
 	}
 	return "", "", fmt.Errorf("question: unsupported relation %q", r)
 }
@@ -387,7 +387,7 @@ func (p Related) Describe(l Language) (string, error) {
 	if e != nil {
 		return "", e
 	}
-	return phrase(l, en+" "+target, "对于"+target+"，"+zh)
+	return phrase(l, en+" "+target, fmt.Sprintf(zh, target))
 }
 
 // Conditions returns one relational condition, regardless of target count.
@@ -490,7 +490,33 @@ func (p CountComparison) Describe(l Language) (string, error) {
 	default:
 		return "", fmt.Errorf("question: invalid comparison")
 	}
-	return phrase(l, fmt.Sprintf("%s %s %d other shapes that (%s)", en, a, p.Value, filter), fmt.Sprintf("对于%s%d个满足（%s）的其他图形，%s", b, p.Value, filter, zh))
+	if l == Chinese {
+		quantity := fmt.Sprintf("%s%d个", b, p.Value)
+		if p.Value == 1 {
+			quantity = b + "一个"
+		}
+		return fmt.Sprintf(zh, quantity+chineseCountTarget(p.Filter, filter)), nil
+	}
+	return phrase(l, fmt.Sprintf("%s %s %d other shapes that (%s)", en, a, p.Value, filter), "")
+}
+
+// chineseCountTarget uses attributes as modifiers without rewriting predicate text.
+// Other predicates retain their full description so logical scope stays explicit.
+func chineseCountTarget(p Predicate, description string) string {
+	switch p := p.(type) {
+	case ColorIs:
+		return "其他" + p.Color.Chinese + "图形"
+	case *ColorIs:
+		return "其他" + p.Color.Chinese + "图形"
+	case KindIs:
+		name, _ := kindName(p.Kind, Chinese) // Already validated by Describe.
+		return "其他" + name
+	case *KindIs:
+		name, _ := kindName(p.Kind, Chinese)
+		return "其他" + name
+	default:
+		return "满足（" + description + "）的其他图形"
+	}
 }
 
 // Conditions includes the relation and target filter's atomic conditions.
