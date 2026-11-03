@@ -132,6 +132,28 @@ func chineseRemaining(terms []Predicate) (string, error) {
 }
 
 func renderChinese(p Predicate) (string, error) {
+	var size *Related
+	switch v := p.(type) {
+	case Related:
+		size = &v
+	case *Related:
+		size = v
+	}
+	if size != nil && size.Target.Kind != "" && (size.Relation == scene.LargerThan || size.Relation == scene.SmallerThan) {
+		name, err := kindName(size.Target.Kind, Chinese)
+		if err != nil {
+			return "", err
+		}
+		target, err := size.Target.describe(Chinese)
+		if err != nil {
+			return "", err
+		}
+		comparison := "大"
+		if size.Relation == scene.SmallerThan {
+			comparison = "小"
+		}
+		return "有多少个" + name + "比" + target + comparison + "？", nil
+	}
 	noun, terms := chineseSubject(p)
 	clause, err := chineseRemaining(terms)
 	if err != nil {
@@ -254,9 +276,9 @@ func describeChineseZeroCount(p CountComparison, target string) (string, error) 
 	case scene.Occluded:
 		modifier = "遮挡了它一部分的"
 	case scene.LargerThan:
-		modifier = "面积比它小的"
+		modifier = "与它形状相同且比它小的"
 	case scene.SmallerThan:
-		modifier = "面积比它大的"
+		modifier = "与它形状相同且比它大的"
 	default:
 		return "", fmt.Errorf("question: unsupported relation %q", p.Relation)
 	}

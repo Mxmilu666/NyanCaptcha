@@ -117,7 +117,7 @@ func TestRelationsAndAmbiguity(t *testing.T) {
 func TestSizeRelationsRequireClearSeparation(t *testing.T) {
 	a := testShape(Rectangle, 1, 50, 50, 40, 40)
 	for _, ratio := range []float64{0.25, 0.5, 0.624, 0.625, 0.626, 0.9, 1, 1.1, 1.31, 1.59, 1.6, 1.61, 2, 4} {
-		b := testShape(Rectangle, 2, 130, 50, 40*ratio, 40)
+		b := testShape(Rectangle, 2, 130, 50, 40*ratio, 40*ratio)
 		for _, relation := range []Relation{LargerThan, SmallerThan} {
 			wantMatch := ratio < 0.625
 			if relation == SmallerThan {
@@ -126,10 +126,33 @@ func TestSizeRelationsRequireClearSeparation(t *testing.T) {
 			wantAmbiguous := ratio >= 0.625 && ratio <= 1.6
 			match, ambiguous := Relate(testScene(a, b), a, b, relation)
 			if match != wantMatch || ambiguous != wantAmbiguous {
-				t.Fatalf("%s with target area ratio %g = (%v,%v), want (%v,%v)", relation, ratio, match, ambiguous, wantMatch, wantAmbiguous)
+				t.Fatalf("%s with target dimension ratio %g = (%v,%v), want (%v,%v)", relation, ratio, match, ambiguous, wantMatch, wantAmbiguous)
 			}
 			if match, ambiguous := Relate(testScene(a), a, a, relation); match || ambiguous {
 				t.Fatalf("self %s = (%v,%v)", relation, match, ambiguous)
+			}
+		}
+	}
+}
+
+func TestSizeRelationsRejectAreaOnlyComparisons(t *testing.T) {
+	a := testShape(Rectangle, 1, 60, 60, 40, 40)
+	for _, b := range []Shape{
+		testShape(Rectangle, 2, 140, 60, 20, 40),
+		testShape(Rectangle, 2, 140, 60, 40, 20),
+		testShape(Rectangle, 2, 140, 60, 20, 80),
+	} {
+		for _, relation := range []Relation{LargerThan, SmallerThan} {
+			if match, ambiguous := Relate(testScene(a, b), a, b, relation); match || !ambiguous {
+				t.Fatalf("accepted incomparable dimensions: %s %+v", relation, b)
+			}
+		}
+	}
+	for _, kind := range []Kind{Circle, Triangle, Star} {
+		b := testShape(kind, 2, 140, 60, 12, 12)
+		for _, relation := range []Relation{LargerThan, SmallerThan} {
+			if match, ambiguous := Relate(testScene(a, b), a, b, relation); match || ambiguous {
+				t.Fatalf("cross-kind comparison was not excluded: %s %s", relation, kind)
 			}
 		}
 	}

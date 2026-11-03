@@ -375,9 +375,9 @@ func relationNames(r scene.Relation) (string, string, error) {
 	case scene.Occluded:
 		return "are partly hidden behind", "被%s部分遮挡", nil
 	case scene.LargerThan:
-		return "have greater area than", "面积比%s大", nil
+		return "have the same shape as and are larger than", "与%s形状相同，且比它大", nil
 	case scene.SmallerThan:
-		return "have smaller area than", "面积比%s小", nil
+		return "have the same shape as and are smaller than", "与%s形状相同，且比它小", nil
 	}
 	return "", "", fmt.Errorf("question: unsupported relation %q", r)
 }

@@ -53,7 +53,7 @@ func Constraints(t Type) (Suitability, error) {
 	case Occlusion:
 		return Suitability{1, 3, "A uniquely described occluder and clearly occluded, still readable shapes."}, nil
 	case Size:
-		return Suitability{1, 3, "A unique reference and area ratios outside the geometry ambiguity band."}, nil
+		return Suitability{1, 3, "A unique same-kind reference with both dimensions separated by more than 1.6x."}, nil
 	case Compound:
 		return Suitability{2, 3, "Two or three distinct atomic conditions joined by explicit AND/OR, or a relational count comparison."}, nil
 	case MultiTarget:
@@ -249,7 +249,7 @@ func relationCandidate(s *scene.Scene, rs []scene.Relation, all bool) (Predicate
 			return nil, e
 		}
 		r.All = true
-		if j == 0 {
+		if j == 0 && rs[i] != scene.LargerThan && rs[i] != scene.SmallerThan {
 			r.Kind = ""
 		} else {
 			r.Color = nil
@@ -262,8 +262,8 @@ func relationCandidate(s *scene.Scene, rs []scene.Relation, all bool) (Predicate
 	return Related{Relation: rs[i], Target: r}, nil
 }
 
-// sizeCandidate samples only references whose area is clearly separated from
-// every other shape; otherwise dense scenes waste attempts on ambiguous pairs.
+// sizeCandidate samples references clearly separated in both dimensions from
+// every other shape of the same kind; unrelated kinds never count as matches.
 func sizeCandidate(s *scene.Scene) (Predicate, error) {
 	i, err := pick(2)
 	if err != nil {
@@ -313,7 +313,8 @@ func candidate(s *scene.Scene, t Type, n int) (Predicate, error) {
 		if i < 4 {
 			p = Position{[]Side{Left, Right, Top, Bottom}[i]}
 		} else {
-			p, e = relationCandidate(s, []scene.Relation{scene.LeftOf, scene.RightOf, scene.Above, scene.Below, scene.Near, scene.Far, scene.Inside}, false)
+			// Generated questions use visible relations, never subjective near/far distances.
+			p, e = relationCandidate(s, []scene.Relation{scene.LeftOf, scene.RightOf, scene.Above, scene.Below, scene.Overlapping, scene.Inside}, false)
 		}
 	case Occlusion:
 		var i int
@@ -328,7 +329,7 @@ func candidate(s *scene.Scene, t Type, n int) (Predicate, error) {
 	case Size:
 		p, e = sizeCandidate(s)
 	case MultiTarget:
-		p, e = relationCandidate(s, []scene.Relation{scene.LargerThan, scene.SmallerThan, scene.LeftOf, scene.RightOf, scene.Above, scene.Below, scene.Near, scene.Far}, true)
+		p, e = relationCandidate(s, []scene.Relation{scene.LargerThan, scene.SmallerThan, scene.LeftOf, scene.RightOf, scene.Above, scene.Below, scene.Overlapping}, true)
 	case Exclusion:
 		var child Predicate
 		child, e = attribute(s)

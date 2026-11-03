@@ -46,13 +46,13 @@ func Generate(c Config) (*scene.Scene, error) {
 		}
 		cells[i], cells[j] = cells[j], cells[i]
 	}
-	// Keep one middle-sized shape isolated from both size groups so a size
-	// question has a usable reference even when the scene contains many shapes.
+	// Keep a middle-sized reference separated from the small and large groups.
+	// Size comparisons use matching kinds and both dimensions, not filled area.
 	reference, err := random.Int(n)
 	if err != nil {
 		return nil, err
 	}
-	smallArea := math.Max(12*12, base*base*0.16)
+	smallWidth := math.Max(12/0.8, base*0.32)
 	s := &scene.Scene{Width: c.Width, Height: c.Height, Shapes: make([]scene.Shape, 0, n)}
 	for i := range n {
 		// Collect entropy up front and propagate failures rather than substituting defaults.
@@ -71,25 +71,18 @@ func Generate(c Config) (*scene.Scene, error) {
 		if e != nil {
 			return nil, e
 		}
-		// Normalize by filled area, not bounding-box width: stars and triangles
-		// otherwise look as wide as circles while having much less area.
-		// Leave room for the 4% jitter above the 1.6x comparison threshold.
-		area := smallArea * (1 + 0.04*u[0])
+		// A 1.7x linear step keeps both dimensions above the 1.6x threshold
+		// despite 4% jitter. Fixed aspect ratios preserve same-kind proportions.
+		w := smallWidth * (1 + 0.04*u[0])
 		if i == reference {
-			area *= 1.7
+			w *= 1.7
 		} else if u[0] >= 0.5 {
-			area *= 1.7 * 1.7
+			w *= 1.7 * 1.7
 		}
-		aspect := 1.0
+		h := w
 		if c.Kinds[ki] == scene.Ellipse || c.Kinds[ki] == scene.Rectangle {
-			aspect = math.Max(12*12/area, 0.65+0.2*u[1])
+			h = w * 0.8
 		}
-		unitArea := scene.Area(scene.Shape{Kind: c.Kinds[ki], Width: 1, Height: aspect})
-		if unitArea <= 0 {
-			return nil, errors.New("generator: invalid shape kind")
-		}
-		w := math.Sqrt(area / unitArea)
-		h := w * aspect
 		x := (float64(cells[i]%cols)+0.5)*cw + (u[2]-0.5)*cw*0.22
 		y := (float64(cells[i]/cols)+0.5)*ch + (u[3]-0.5)*ch*0.22
 		if i > 0 && u[4] < c.Overlap {
@@ -103,7 +96,9 @@ func Generate(c Config) (*scene.Scene, error) {
 			}
 			a := s.Shapes[nearest]
 			angle := math.Atan2(y-a.Center.Y, x-a.Center.X)
-			separation := (w + a.Width) * (0.30 + 0.08*u[5])
+			// Limit penetration relative to the smaller shape, not the sum
+			// of widths: large size tiers must not swallow small neighbors.
+			separation := (w+a.Width)/2 - math.Min(w, a.Width)*(0.12+0.08*u[5])
 			x, y = a.Center.X+math.Cos(angle)*separation, a.Center.Y+math.Sin(angle)*separation
 		}
 		radius := math.Hypot(w, h)/2 + 3

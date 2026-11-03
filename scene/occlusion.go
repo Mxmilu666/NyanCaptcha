@@ -217,9 +217,9 @@ func alignedDirection(along, across float64) (match, ambiguous bool) {
 // perpendicular center displacement / mean actual perpendicular extent must be
 // <0.5; >0.75 is a different row/column, and [0.5,0.75] is ambiguous.
 // Near compares center distance / mean actual bounding diagonal: <0.85 is true,
-// >1.05 false; Far uses >1.8 and <1.6. Larger/Smaller compare analytic areas with
-// true ratio >1.6, false <0.625; the closed interval [0.625,1.6] is ambiguous in both
-// directions, so visually similar sizes cannot become definite nonmatches.
+// >1.05 false; Far uses >1.8 and <1.6. Larger/Smaller only compare matching kinds.
+// Both unrotated dimensions must exceed 1.6x for true, or be below 1/1.6 for
+// false; all other same-kind pairs are ambiguous. Different kinds are false.
 // Self-relations remain false. Intersections use the half-pixel lattice:
 // Overlapping requires >4% of the smaller shape; zero is false, (0,4%] ambiguous.
 // Inside requires >=99.5% of the first shape inside the second; <=95% is false.
@@ -265,10 +265,21 @@ func Relate(s *Scene, a, b Shape, r Relation) (match, ambiguous bool) {
 			return greaterBand(-distance/scale, -1.05, -.85)
 		}
 		return greaterBand(distance/scale, 1.6, 1.8)
-	case LargerThan:
-		return greaterBand(Area(a)/Area(b), 1/1.6, 1.6)
-	case SmallerThan:
-		return greaterBand(Area(b)/Area(a), 1/1.6, 1.6)
+	case LargerThan, SmallerThan:
+		if a.Kind != b.Kind {
+			return false, false
+		}
+		if r == SmallerThan {
+			a, b = b, a
+		}
+		width, height := a.Width/b.Width, a.Height/b.Height
+		if width > 1.6 && height > 1.6 {
+			return true, false
+		}
+		if width < 1/1.6 && height < 1/1.6 {
+			return false, false
+		}
+		return false, true
 	case Inside, Overlapping, Occluded:
 		if r == Occluded && b.Z <= a.Z {
 			return false, false

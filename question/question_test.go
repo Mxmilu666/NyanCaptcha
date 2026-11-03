@@ -58,19 +58,23 @@ func TestPredicateAnswers(t *testing.T) {
 
 func TestSizePredicateAnswers(t *testing.T) {
 	s := fixture()
-	// Separate both reference shapes and every other candidate by more than 2x
-	// area, including candidates that should not match the comparison.
+	// Same-kind targets have clearly separated dimensions. Rectangles are
+	// distractors and must never count toward a circle size comparison.
 	s.Shapes[1].Width, s.Shapes[1].Height = 12, 12
 	s.Shapes[4].Width, s.Shapes[4].Height = 7, 7
-	s.Shapes[5].Width, s.Shapes[5].Height = 6, 6
 	red := scene.Palette()[0]
+	p := Related{scene.LargerThan, Reference{Color: &red, Kind: scene.Circle}}
+	if n, err := Count(s, p); err != nil || n != 1 {
+		t.Fatalf("unique reference: Count = %d, %v; want 1", n, err)
+	}
+	s.Shapes[1].Kind = scene.Circle
+	s.Shapes[5].Width, s.Shapes[5].Height = 6, 6
 	for _, p := range []Predicate{
-		Related{scene.LargerThan, Reference{Color: &red, Kind: scene.Circle}},
 		Related{scene.LargerThan, Reference{Color: &red, All: true}},
 		CountComparison{Filter: ColorIs{red}, Relation: scene.LargerThan, Op: Equal, Value: 2},
 	} {
-		if n, err := Count(s, p); err != nil || n != 2 {
-			t.Fatalf("%T: Count = %d, %v; want 2", p, n, err)
+		if n, err := Count(s, p); err != nil || n != 1 {
+			t.Fatalf("%T: Count = %d, %v; want 1", p, n, err)
 		}
 	}
 }
@@ -186,7 +190,7 @@ func TestBuildAllTypes(t *testing.T) {
 				s = occludedFixture()
 			}
 			if typ == Size {
-				s.Shapes[0].Width, s.Shapes[0].Height = 16, 16
+				s.Shapes[0].Width, s.Shapes[0].Height = 14, 14
 			}
 			for _, lang := range []Language{English, Chinese} {
 				q := mustBuild(t, s, typ, n, lang)
