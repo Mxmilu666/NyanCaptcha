@@ -102,7 +102,7 @@ func (p And) Evaluate(s *scene.Scene, sh scene.Shape) (bool, error) {
 	return junction(s, sh, p.Terms, true)
 }
 
-// Describe renders a parenthesized conjunction.
+// Describe renders a conjunction with language-appropriate logical grouping.
 func (p And) Describe(l Language) (string, error) { return describeTerms(p.Terms, l, true) }
 
 // Conditions sums the atomic conditions of all terms.
@@ -116,7 +116,7 @@ func (p Or) Evaluate(s *scene.Scene, sh scene.Shape) (bool, error) {
 	return junction(s, sh, p.Terms, false)
 }
 
-// Describe renders a parenthesized disjunction.
+// Describe renders a disjunction with language-appropriate logical grouping.
 func (p Or) Describe(l Language) (string, error) { return describeTerms(p.Terms, l, false) }
 
 // Conditions sums the atomic conditions of all terms.
@@ -152,15 +152,17 @@ func junction(s *scene.Scene, sh scene.Shape, ps []Predicate, and bool) (bool, e
 	return result, nil
 }
 func describeTerms(ps []Predicate, l Language, and bool) (string, error) {
+	if l == Chinese {
+		return describeChineseTerms(ps, and)
+	}
 	if len(ps) < 2 {
 		return "", fmt.Errorf("question: too few logical terms")
 	}
-	joinEn, joinZh := " or ", "或者"
+	join := " or "
 	if and {
-		joinEn, joinZh = " and ", "并且"
+		join = " and "
 	}
-	join, err := phrase(l, joinEn, joinZh)
-	if err != nil {
+	if _, err := phrase(l, "", ""); err != nil {
 		return "", err
 	}
 	out := make([]string, len(ps))
@@ -189,7 +191,7 @@ func (p Not) Evaluate(s *scene.Scene, sh scene.Shape) (bool, error) {
 	return !v, e
 }
 
-// Describe renders explicit logical negation.
+// Describe renders negation without changing the child's logical scope.
 func (p Not) Describe(l Language) (string, error) {
 	if p.Term == nil {
 		return "", fmt.Errorf("question: nil negation")
@@ -198,7 +200,10 @@ func (p Not) Describe(l Language) (string, error) {
 	if e != nil {
 		return "", e
 	}
-	return phrase(l, "do not satisfy ("+v+")", "不满足（"+v+"）")
+	if l == Chinese {
+		return describeChineseNot(p.Term, v)
+	}
+	return phrase(l, "do not satisfy ("+v+")", "")
 }
 
 // Conditions returns the child's atomic condition count.
@@ -311,7 +316,7 @@ func (r Reference) describe(l Language) (string, error) {
 			return "", fmt.Errorf("question: unnamed reference color")
 		}
 		en = r.Color.Name + " " + en
-		zh = r.Color.Chinese + "" + zh
+		zh = r.Color.Chinese + zh
 	}
 	if r.All {
 		return phrase(l, "every "+en, "每一个"+zh)
@@ -352,13 +357,13 @@ func (p Related) Evaluate(s *scene.Scene, sh scene.Shape) (bool, error) {
 func relationNames(r scene.Relation) (string, string, error) {
 	switch r {
 	case scene.LeftOf:
-		return "are to the left of", "位于%s的左侧", nil
+		return "are in the same row as and to the left of", "与%s在同一排，且位于其左侧", nil
 	case scene.RightOf:
-		return "are to the right of", "位于%s的右侧", nil
+		return "are in the same row as and to the right of", "与%s在同一排，且位于其右侧", nil
 	case scene.Above:
-		return "are above", "位于%s的上方", nil
+		return "are in the same column as and above", "与%s在同一列，且位于其上方", nil
 	case scene.Below:
-		return "are below", "位于%s的下方", nil
+		return "are in the same column as and below", "与%s在同一列，且位于其下方", nil
 	case scene.Near:
 		return "are near", "靠近%s", nil
 	case scene.Far:
@@ -495,28 +500,30 @@ func (p CountComparison) Describe(l Language) (string, error) {
 		if p.Value == 1 {
 			quantity = b + "一个"
 		}
-		return fmt.Sprintf(zh, quantity+chineseCountTarget(p.Filter, filter)), nil
+		target, err := chineseCountTarget(p.Filter)
+		if err != nil {
+			return "", err
+		}
+		if p.Value == 0 {
+			return describeChineseZeroCount(p, target)
+		}
+		return fmt.Sprintf(zh, quantity+target), nil
 	}
 	return phrase(l, fmt.Sprintf("%s %s %d other shapes that (%s)", en, a, p.Value, filter), "")
 }
 
-// chineseCountTarget uses attributes as modifiers without rewriting predicate text.
-// Other predicates retain their full description so logical scope stays explicit.
-func chineseCountTarget(p Predicate, description string) string {
-	switch p := p.(type) {
-	case ColorIs:
-		return "其他" + p.Color.Chinese + "图形"
-	case *ColorIs:
-		return "其他" + p.Color.Chinese + "图形"
-	case KindIs:
-		name, _ := kindName(p.Kind, Chinese) // Already validated by Describe.
-		return "其他" + name
-	case *KindIs:
-		name, _ := kindName(p.Kind, Chinese)
-		return "其他" + name
-	default:
-		return "满足（" + description + "）的其他图形"
+// chineseCountTarget uses a noun phrase for attributes and keeps compound
+// target conditions explicitly grouped, distinct from the candidate's clauses.
+func chineseCountTarget(p Predicate) (string, error) {
+	noun, terms := chineseSubject(p)
+	clause, err := chineseRemaining(terms)
+	if err != nil {
+		return "", err
 	}
+	if clause == "" {
+		return "其他" + noun, nil
+	}
+	return "其他" + noun + "（这些目标图形" + clause + "）", nil
 }
 
 // Conditions includes the relation and target filter's atomic conditions.
